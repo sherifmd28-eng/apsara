@@ -1,0 +1,503 @@
+import fs from 'fs';
+import path from 'path';
+
+const DB_DIR = path.join(process.cwd(), 'db');
+const DB_FILE = path.join(DB_DIR, 'database.json');
+
+export interface ProductReview {
+  id: string;
+  name: string;
+  rating: number;
+  comment: string;
+  date: string;
+}
+
+export interface Product {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  originalPrice: number;
+  image: string;
+  images: string[];
+  category: string;
+  stock: number;
+  rating: number;
+  numReviews: number;
+  isFeatured: boolean;
+  specs: Record<string, string>;
+  reviews: ProductReview[];
+  createdAt: string;
+}
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  passwordHash: string;
+  role: 'user' | 'admin';
+  createdAt: string;
+}
+
+export interface OrderItem {
+  productId: string;
+  name: string;
+  price: number;
+  image: string;
+  quantity: number;
+}
+
+export interface Order {
+  id: string;
+  userId: string;
+  items: OrderItem[];
+  shippingAddress: {
+    fullName: string;
+    phone: string;
+    street: string;
+    city: string;
+    state: string;
+    pinCode: string;
+  };
+  paymentMethod: 'UPI' | 'Card' | 'COD';
+  paymentStatus: 'Pending' | 'Paid' | 'Failed';
+  paymentId?: string;
+  totalPrice: number;
+  orderStatus: 'Pending' | 'Shipped' | 'Out for Delivery' | 'Delivered' | 'Cancelled';
+  trackingNumber?: string;
+  trackingStatus?: string;
+  createdAt: string;
+}
+
+export interface CartItem {
+  productId: string;
+  quantity: number;
+}
+
+export interface Cart {
+  userId: string;
+  items: CartItem[];
+}
+
+export interface Wishlist {
+  userId: string;
+  productIds: string[];
+}
+
+export interface DatabaseSchema {
+  users: User[];
+  products: Product[];
+  orders: Order[];
+  carts: Cart[];
+  wishlists: Wishlist[];
+}
+
+const DEFAULT_PRODUCTS: Product[] = [
+  {
+    id: 'prod-1',
+    name: 'iPhone 15 Pro Max (256GB, Blue Titanium)',
+    description: 'Forged in titanium and featuring the groundbreaking A17 Pro chip, a customizable Action button, and the most powerful iPhone camera system ever.',
+    price: 144900,
+    originalPrice: 159900,
+    image: 'https://images.unsplash.com/photo-1695048133142-1a20484d2569?w=600&auto=format&fit=crop&q=60',
+    images: [
+      'https://images.unsplash.com/photo-1695048133142-1a20484d2569?w=600&auto=format&fit=crop&q=60',
+      'https://images.unsplash.com/photo-1695048133107-16017e4efc38?w=600&auto=format&fit=crop&q=60',
+    ],
+    category: 'Mobiles & Electronics',
+    stock: 25,
+    rating: 4.8,
+    numReviews: 124,
+    isFeatured: true,
+    specs: {
+      'Brand': 'Apple',
+      'Model Name': 'iPhone 15 Pro Max',
+      'Network Service Provider': 'Unlocked',
+      'Operating System': 'iOS 17',
+      'Cellular Technology': '5G',
+    },
+    reviews: [
+      { id: 'rev-1', name: 'Aarav Sharma', rating: 5, comment: 'Phenomenal performance! Camera zoom is mind-blowing.', date: '2026-06-15T10:30:00Z' },
+      { id: 'rev-2', name: 'Priya Patel', rating: 4, comment: 'Battery life is great, titanium feel is very premium.', date: '2026-06-18T14:45:00Z' },
+    ],
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'prod-2',
+    name: 'OnePlus 12 (16GB RAM, 512GB, Silky Black)',
+    description: 'The OnePlus 12 represents the absolute pinnacle of performance, efficiency, and styling. Featuring Snapdragon 8 Gen 3, a brilliant 2K display, and 100W SUPERVOOC charging.',
+    price: 64999,
+    originalPrice: 69999,
+    image: 'https://images.unsplash.com/photo-1598327105666-5b89351aff97?w=600&auto=format&fit=crop&q=60',
+    images: [
+      'https://images.unsplash.com/photo-1598327105666-5b89351aff97?w=600&auto=format&fit=crop&q=60',
+    ],
+    category: 'Mobiles & Electronics',
+    stock: 40,
+    rating: 4.6,
+    numReviews: 89,
+    isFeatured: true,
+    specs: {
+      'Brand': 'OnePlus',
+      'Model Name': 'OnePlus 12',
+      'Processor': 'Snapdragon 8 Gen 3',
+      'RAM': '16 GB',
+      'Charging': '100W SUPERVOOC Fast Charge',
+    },
+    reviews: [
+      { id: 'rev-3', name: 'Rohan Gupta', rating: 5, comment: 'Charges from 0 to 100 in 25 mins. Absolute beast.', date: '2026-06-20T08:15:00Z' },
+    ],
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'prod-3',
+    name: 'Sony WH-1000XM5 Wireless Noise Cancelling Headphones',
+    description: 'Industry-leading noise cancellation, exceptional sound quality, crystal clear calling, and up to 30 hours of battery life with quick charging.',
+    price: 29999,
+    originalPrice: 34999,
+    image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&auto=format&fit=crop&q=60',
+    images: [
+      'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&auto=format&fit=crop&q=60',
+      'https://images.unsplash.com/photo-1546435770-a3e426bf472b?w=600&auto=format&fit=crop&q=60',
+    ],
+    category: 'Mobiles & Electronics',
+    stock: 15,
+    rating: 4.7,
+    numReviews: 245,
+    isFeatured: true,
+    specs: {
+      'Brand': 'Sony',
+      'Model Name': 'WH-1000XM5',
+      'Color': 'Black',
+      'Battery Life': 'Up to 30 hours',
+      'Weight': '250g',
+    },
+    reviews: [
+      { id: 'rev-4', name: 'Amit Verma', rating: 5, comment: 'The ANC is absolute magic. Silent train journeys from now on.', date: '2026-07-01T12:00:00Z' },
+    ],
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'prod-4',
+    name: 'Banarasi Katan Silk Saree (Royal Blue & Gold)',
+    description: 'Exquisitely hand-woven pure Katan silk Banarasi saree featuring ornate gold Zari work along the borders and pallu. Perfect for festive celebrations and weddings.',
+    price: 4999,
+    originalPrice: 9999,
+    image: 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=600&auto=format&fit=crop&q=60',
+    images: [
+      'https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=600&auto=format&fit=crop&q=60',
+    ],
+    category: 'Fashion & Apparel',
+    stock: 12,
+    rating: 4.9,
+    numReviews: 48,
+    isFeatured: true,
+    specs: {
+      'Fabric': '100% Pure Katan Silk',
+      'Color': 'Royal Blue',
+      'Work': 'Gold Zari Brocade weaving',
+      'Occasion': 'Festive / Wedding',
+      'Origin': 'Varanasi (Banaras)',
+    },
+    reviews: [
+      { id: 'rev-5', name: 'Ananya Deshmukh', rating: 5, comment: 'Authentic feel, soft silk, and the Zari work shines beautifully in light.', date: '2026-07-03T18:22:00Z' },
+    ],
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'prod-5',
+    name: "Men's Handcrafted Leather Chelsea Boots",
+    description: 'Meticulously crafted from full-grain genuine leather with a sleek elastic side gusset, pull tab, and cushioned insoles for all-day comfort.',
+    price: 3499,
+    originalPrice: 5999,
+    image: 'https://images.unsplash.com/photo-1520639888713-7851133b1ed0?w=600&auto=format&fit=crop&q=60',
+    images: [
+      'https://images.unsplash.com/photo-1520639888713-7851133b1ed0?w=600&auto=format&fit=crop&q=60',
+    ],
+    category: 'Fashion & Apparel',
+    stock: 30,
+    rating: 4.4,
+    numReviews: 32,
+    isFeatured: false,
+    specs: {
+      'Material': 'Genuine Full-Grain Leather',
+      'Sole Material': 'Durable TPR',
+      'Style': 'Chelsea Boot',
+      'Closure': 'Pull-On',
+    },
+    reviews: [
+      { id: 'rev-6', name: 'Vikram Singh', rating: 4, comment: 'Fit is perfect and leather smells premium. Needs breaking in for a day or two.', date: '2026-07-05T09:10:00Z' },
+    ],
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'prod-6',
+    name: 'Pure Organic Linen Kurta (Mint Green)',
+    description: 'Breathable organic linen regular-fit kurta featuring a mandarin collar, long sleeves, and a patch pocket. Keeps you cool, crisp, and comfortable.',
+    price: 1299,
+    originalPrice: 2499,
+    image: 'https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?w=600&auto=format&fit=crop&q=60',
+    images: [
+      'https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?w=600&auto=format&fit=crop&q=60',
+    ],
+    category: 'Fashion & Apparel',
+    stock: 50,
+    rating: 4.3,
+    numReviews: 56,
+    isFeatured: false,
+    specs: {
+      'Material': '100% Organic Linen',
+      'Fit': 'Regular Fit',
+      'Collar': 'Mandarin / Banded',
+      'Length': 'Knee Length',
+    },
+    reviews: [
+      { id: 'rev-7', name: 'Sanjay Nair', rating: 4, comment: 'Very airy and rich texture. True to size.', date: '2026-07-08T15:30:00Z' },
+    ],
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'prod-7',
+    name: 'Handcrafted Ceramic Dinner Set (12 Pieces, Sand)',
+    description: 'Rustic stoneware dinner set featuring a unique reactive glaze. Includes 4 dinner plates, 4 side plates, and 4 dessert bowls. Microwave and dishwasher safe.',
+    price: 2499,
+    originalPrice: 3999,
+    image: 'https://images.unsplash.com/photo-1612196808214-b8e1d6145a8c?w=600&auto=format&fit=crop&q=60',
+    images: [
+      'https://images.unsplash.com/photo-1612196808214-b8e1d6145a8c?w=600&auto=format&fit=crop&q=60',
+    ],
+    category: 'Home & Living',
+    stock: 18,
+    rating: 4.5,
+    numReviews: 29,
+    isFeatured: true,
+    specs: {
+      'Material': 'Ceramic Stoneware',
+      'Finish': 'Reactive Sand Glaze',
+      'Microwave Safe': 'Yes',
+      'Dishwasher Safe': 'Yes',
+      'Pieces': '12-Piece Set',
+    },
+    reviews: [
+      { id: 'rev-8', name: 'Meera Sen', rating: 5, comment: 'Elegant, modern, and sturdy. Glaze variation makes each piece unique!', date: '2026-07-10T11:40:00Z' },
+    ],
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'prod-8',
+    name: 'Smart RGB LED Spiral Floor Lamp',
+    description: 'Add ambient lighting to your living room or study. Syncs with music, compatible with Alexa and Google Home, offering 16 million colors.',
+    price: 3999,
+    originalPrice: 6999,
+    image: 'https://images.unsplash.com/photo-1507473885765-e6ed057f782c?w=600&auto=format&fit=crop&q=60',
+    images: [
+      'https://images.unsplash.com/photo-1507473885765-e6ed057f782c?w=600&auto=format&fit=crop&q=60',
+    ],
+    category: 'Home & Living',
+    stock: 22,
+    rating: 4.5,
+    numReviews: 43,
+    isFeatured: false,
+    specs: {
+      'Light Source': 'LED RGB',
+      'Style': 'Modern Spiral',
+      'Power Source': 'Corded Electric',
+      'Connectivity': 'WiFi / Bluetooth',
+      'App Control': 'Apsara Smart App',
+    },
+    reviews: [
+      { id: 'rev-9', name: 'Karan Malhotra', rating: 4, comment: 'Integrates perfectly with Alexa. Brightness is solid and color patterns are great.', date: '2026-07-11T13:50:00Z' },
+    ],
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'prod-9',
+    name: 'Premium Ergonomic Mesh High-Back Office Chair',
+    description: 'Designed for long hours of comfortable sitting. Lumbar support, armrests, and headrest adjustability for maximum support.',
+    price: 12499,
+    originalPrice: 18999,
+    image: 'https://images.unsplash.com/photo-1505797149-43b0069ec26b?w=600&auto=format&fit=crop&q=60',
+    images: [
+      'https://images.unsplash.com/photo-1505797149-43b0069ec26b?w=600&auto=format&fit=crop&q=60',
+    ],
+    category: 'Home & Living',
+    stock: 14,
+    rating: 4.6,
+    numReviews: 67,
+    isFeatured: true,
+    specs: {
+      'Chair Frame': 'Alloy Steel & Nylon',
+      'Upholstery': 'Breathable Kore Mesh',
+      'Adjustability': 'Lumbar, Armrest, Headrest, Height',
+      'Load Capacity': 'Up to 150 kg',
+    },
+    reviews: [
+      { id: 'rev-10', name: 'Nikhil Rao', rating: 5, comment: 'Completely fixed my back ache. Ergonomics are comparable to Hermans.', date: '2026-07-12T16:10:00Z' },
+    ],
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'prod-10',
+    name: 'The God of Small Things by Arundhati Roy',
+    description: "The Booker Prize-winning novel that established Arundhati Roy as one of India's greatest contemporary writers. A rich, lyrical story of twins Estha and Rahel in Kerala.",
+    price: 399,
+    originalPrice: 499,
+    image: 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=600&auto=format&fit=crop&q=60',
+    images: [
+      'https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=600&auto=format&fit=crop&q=60',
+    ],
+    category: 'Books & Stationery',
+    stock: 100,
+    rating: 4.8,
+    numReviews: 1240,
+    isFeatured: false,
+    specs: {
+      'Author': 'Arundhati Roy',
+      'Publisher': 'Penguin India',
+      'Language': 'English',
+      'Format': 'Paperback',
+      'Page Count': '340',
+    },
+    reviews: [
+      { id: 'rev-11', name: 'Devika Krishnan', rating: 5, comment: 'A masterpiece of Indian English literature. Stunning language.', date: '2026-07-13T10:00:00Z' },
+    ],
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'prod-11',
+    name: 'Forest Essentials Ayurvedic Beauty Skincare Kit',
+    description: 'An luxurious Ayurvedic skincare collection containing Soundarya Radiance Cream, Facial Cleanser, Pure Rosewater Tonic, and Eladi Skin Day Cream.',
+    price: 4250,
+    originalPrice: 5500,
+    image: 'https://images.unsplash.com/photo-1608248597481-496100c80836?w=600&auto=format&fit=crop&q=60',
+    images: [
+      'https://images.unsplash.com/photo-1608248597481-496100c80836?w=600&auto=format&fit=crop&q=60',
+    ],
+    category: 'Beauty & Personal Care',
+    stock: 20,
+    rating: 4.7,
+    numReviews: 34,
+    isFeatured: true,
+    specs: {
+      'Brand': 'Forest Essentials',
+      'Formulation': '100% Ayurvedic / Organic',
+      'Ideal For': 'All Skin Types',
+      'Kit Contents': 'Facial Cleanser, Mist, Cream, Serum',
+    },
+    reviews: [
+      { id: 'rev-12', name: 'Kirti Sharma', rating: 5, comment: 'Best Ayurvedic brand. Smells divine and leaves a beautiful glow.', date: '2026-07-14T09:12:00Z' },
+    ],
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'prod-12',
+    name: 'Premium Matte Liquid Lipstick Set (4 Shades)',
+    description: 'Long-lasting, smudge-proof, and lightweight liquid matte lipsticks infused with Vitamin E and Almond Oil for hydrated, gorgeous lips.',
+    price: 1899,
+    originalPrice: 2499,
+    image: 'https://images.unsplash.com/photo-1586495777744-4413f21062fa?w=600&auto=format&fit=crop&q=60',
+    images: [
+      'https://images.unsplash.com/photo-1586495777744-4413f21062fa?w=600&auto=format&fit=crop&q=60',
+    ],
+    category: 'Beauty & Personal Care',
+    stock: 45,
+    rating: 4.2,
+    numReviews: 18,
+    isFeatured: false,
+    specs: {
+      'Finish Type': 'Matte',
+      'Duration': 'Up to 12 Hours',
+      'Cruelty-Free': 'Yes',
+      'Shades Included': 'Cherry Red, Nude Pink, Deep Mauve, Coral Peach',
+    },
+    reviews: [
+      { id: 'rev-13', name: 'Nehal Varma', rating: 4, comment: 'Highly pigmented and non-drying. The colors look stunning on Indian skin tones.', date: '2026-07-15T15:20:00Z' },
+    ],
+    createdAt: new Date().toISOString(),
+  }
+];
+
+export function initDatabase() {
+  if (!fs.existsSync(DB_DIR)) {
+    fs.mkdirSync(DB_DIR, { recursive: true });
+  }
+
+  if (!fs.existsSync(DB_FILE)) {
+    const defaultDb: DatabaseSchema = {
+      users: [
+        {
+          id: 'usr-admin',
+          name: 'Apsara Admin',
+          email: 'admin@apsara.in',
+          passwordHash: '5b1115b9a89d1f33f6df231c62512f4551119b49673cc670c793ff0e81c1c9b68c2fb8bb0d9e847c94df6df3dfca6d2ef07cf64b8577e77b676a08cd0a89d6e4', // admin123
+          role: 'admin',
+          createdAt: new Date().toISOString(),
+        },
+        {
+          id: 'usr-user',
+          name: 'Rajesh Kumar',
+          email: 'rajesh@gmail.com',
+          passwordHash: 'fae6118d3df62ef586043bc6f3e098ffb4e8574b6a22f77e69f83a45c3b1e32d6f83ab2df23fbe987fecbcbcbc056fe08fbc8ebf8debf83fe8df2a2fe8decf3c', // user123
+          role: 'user',
+          createdAt: new Date().toISOString(),
+        }
+      ],
+      products: DEFAULT_PRODUCTS,
+      orders: [],
+      carts: [],
+      wishlists: []
+    };
+    fs.writeFileSync(DB_FILE, JSON.stringify(defaultDb, null, 2), 'utf-8');
+  }
+}
+
+export function readDatabase(): DatabaseSchema {
+  initDatabase();
+  try {
+    const data = fs.readFileSync(DB_FILE, 'utf-8');
+    return JSON.parse(data);
+  } catch (err) {
+    console.error('Failed to read database', err);
+    return { users: [], products: [], orders: [], carts: [], wishlists: [] };
+  }
+}
+
+export function writeDatabase(data: DatabaseSchema): boolean {
+  initDatabase();
+  const tempFile = `${DB_FILE}.tmp`;
+  try {
+    fs.writeFileSync(tempFile, JSON.stringify(data, null, 2), 'utf-8');
+    fs.renameSync(tempFile, DB_FILE);
+    return true;
+  } catch (err) {
+    console.error('Failed to write database atomically', err);
+    if (fs.existsSync(tempFile)) {
+      try { fs.unlinkSync(tempFile); } catch (_) {}
+    }
+    return false;
+  }
+}
+
+export function getProducts() {
+  return readDatabase().products;
+}
+
+export function getProductById(id: string) {
+  return readDatabase().products.find(p => p.id === id);
+}
+
+export function getUsers() {
+  return readDatabase().users;
+}
+
+export function getOrders() {
+  return readDatabase().orders;
+}
+
+export function getCarts() {
+  return readDatabase().carts;
+}
+
+export function getWishlists() {
+  return readDatabase().wishlists;
+}
